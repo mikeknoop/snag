@@ -1,6 +1,6 @@
 ###
 
-	Snag.js 0.1.0
+	Snag.js 0.1.1
 	A stupidly simple (to use) javascript drag and drop
 	(c) 2010 Mike Knoop, Snapier LLC
 	Snag may be freely distributed under the MIT license.
@@ -54,11 +54,11 @@ class SnagDragDrop
 
 	mouseDown: (e) ->
 		# mouseDown/Up fixes cursor change when dragging
-		return false
+		return false if @dragEl?
 
 	mouseUp: (e) ->
 		# mouseDown/Up fixes cursor change when dragging
-		return false
+		return false if @dragEl?
 
 	attachDroppable: (className) ->
 		ddList = this
@@ -119,7 +119,7 @@ class DraggableItem
 			di.endDrag(e, el)
 		)
 		# left mouse button was pressed, set flag
-		@leftButtonDown = true if (e.which == 1) 
+		@leftButtonDown = true if e.which == 1
 		# save mouse offset plus a hard osset to account for cursor size
 		@mouseOffsetX = e.pageX - $(el).offset().left + 15
 		@mouseOffsetY = e.pageY - $(el).offset().top + 10
@@ -136,11 +136,11 @@ class DraggableItem
 	endDrag: (e, el) ->
 		di = this
 		@dragging = false
-		@dragEl = null
+		@ddList.dragEl = null
 		$(document).unbind('mouseup.'+@uid)
 		# remove end drag handler
 		# left mouse button was released, clear flag
-		@leftButtonDown = false if (e.which == 1)
+		@leftButtonDown = false if e.which == 1
 		# remove absolute positioning and styles
 		$(el).removeClass("dragging")
 		$(el).css('position', '')
@@ -157,7 +157,7 @@ class DraggableItem
 		#mouseX = @mouseOffsetX - e.pageX
 		#mouseY = @mouseOffsetY - e.pageY
 		@tweakMouseMoveEvent(e)	# help eliminate tracking errors
-		if (e.which == 1)
+		if e.which == 1
 			# if the mouse is up, dragging shouldn't be happening (edge case)
 			@endDrag(e, el)
 			return false
@@ -172,18 +172,18 @@ class DraggableItem
 		@attachDropElement(ph)
 
 	attachDropElement: (el) ->
-		if (@ddList.dropTargetParent == null)
+		if @ddList.dropTargetParent?
 			# not dropped on a DroppableTarget, append back to original parent
 			$(el).appendTo(@originalParent)
 		else
 			# mouse is over a DroppableTarget, where to attach target?
 			# the second conditional checks the case where the last element is being
-			if (@ddList.dropInsertTo != null and @ddList.dragEl != @ddList.dropInsertTo)
+			if @ddList.dragEl != @ddList.dropInsertTo and @ddList.dropInsertTo?
 				# implies we have an element to append before or after
-				if (@ddList.dropBeforeOrAfter == 'before')
+				if @ddList.dropBeforeOrAfter == 'before'
 					# append before a specific child inside the parent
 					el.insertBefore(@ddList.dropInsertTo)
-				else if (@ddList.dropBeforeOrAfter == 'after')
+				else if @ddList.dropBeforeOrAfter == 'after'
 					# append after
 					el.insertAfter(@ddList.dropInsertTo)
 			else
@@ -194,10 +194,10 @@ class DraggableItem
 	tweakMouseMoveEvent: (e) ->
 		# helper function for preventing mouse tracking errors
 		#Check from jQuery UI for IE versions < 9
-		leftButtonDown = false if ($.browser.msie && !(document.documentMode >= 9) && !event.button)
+		leftButtonDown = false if $.browser.msie && !(document.documentMode >= 9) && !event.button
 		# If left button is not set, set which to 0
 		# This indicates no buttons pressed
-		e.which = 0 if (e.which == 1 && !leftButtonDown)
+		e.which = 0 if e.which == 1 && !leftButtonDown
 
 class DroppableTarget
 	# defines a target which can have things dropped into it
@@ -232,10 +232,10 @@ class DroppableTarget
 
 	checkInTarget: (e, el) ->
 		if @isInBoundary(e, el)
-			if (not @inTarget)
+			if not @inTarget
 				@inTarget = true
 				@enter(e, el)
-		else if (@inTarget)
+		else if @inTarget
 			@inTarget = false
 			@leave(e, el)
 
@@ -247,7 +247,7 @@ class DroppableTarget
 		y = $(el).offset().top
 		dX = $(el).outerWidth()
 		dY = $(el).outerHeight()
-		if (mX >= x && mX <= x+dX && mY >= y && mY <= y+dY)
+		if mX >= x && mX <= x+dX && mY >= y && mY <= y+dY
 			return true
 		else
 			return false
@@ -261,7 +261,7 @@ class DroppableTarget
 		# when in reality there is no item below it due to the plcaeholders
 		# being removed (also make sure not to match the placeholder)
 		$(el).children('*:not(.drag-placeholder)').last().each ->
-			if (dt.isInBoundary(event, this))
+			if dt.isInBoundary(event, this)
 				dt.ddList.dropInsertTo = this
 				dt.ddList.dropBeforeOrAfter = 'after'
 		# now remove the placeholder and see if the mouse if over any of the
@@ -269,7 +269,7 @@ class DroppableTarget
 		# that spot)
 		$(el).children('.drag-placeholder').remove()
 		$(el).children().each ->
-			if (dt.isInBoundary(event, this))
+			if dt.isInBoundary(event, this)
 				dt.ddList.dropInsertTo = this
 				dt.ddList.dropBeforeOrAfter = 'before'
 
@@ -278,13 +278,13 @@ class DroppableTarget
 		$(el).css('position', 'relative')
 	
 	isMaxed: ->
-		if ($(@el).children().length < @maxItems or @maxItems == null)
+		if $(@el).children().length < @maxItems or @maxItems?
 			return false
 		else
 			return true
 
 	enter: (e, el) ->
-		if (not @isMaxed())
+		if not @isMaxed()
 			@ddList.dropTargetParent = @el
 
 	leave: (e, el) ->

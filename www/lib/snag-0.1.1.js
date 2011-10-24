@@ -1,6 +1,6 @@
 /*
 
-	Snag.js 0.1.0
+	Snag.js 0.1.1
 	A stupidly simple (to use) javascript drag and drop
 	(c) 2010 Mike Knoop, Snapier LLC
 	Snag may be freely distributed under the MIT license.
@@ -45,10 +45,14 @@ SnagDragDrop = (function() {
     });
   };
   SnagDragDrop.prototype.mouseDown = function(e) {
-    return false;
+    if (this.dragEl != null) {
+      return false;
+    }
   };
   SnagDragDrop.prototype.mouseUp = function(e) {
-    return false;
+    if (this.dragEl != null) {
+      return false;
+    }
   };
   SnagDragDrop.prototype.attachDroppable = function(className) {
     var ddList;
@@ -121,7 +125,7 @@ DraggableItem = (function() {
     var di;
     di = this;
     this.dragging = false;
-    this.dragEl = null;
+    this.ddList.dragEl = null;
     $(document).unbind('mouseup.' + this.uid);
     if (e.which === 1) {
       this.leftButtonDown = false;
@@ -152,10 +156,10 @@ DraggableItem = (function() {
     return this.attachDropElement(ph);
   };
   DraggableItem.prototype.attachDropElement = function(el) {
-    if (this.ddList.dropTargetParent === null) {
+    if (this.ddList.dropTargetParent != null) {
       return $(el).appendTo(this.originalParent);
     } else {
-      if (this.ddList.dropInsertTo !== null && this.ddList.dragEl !== this.ddList.dropInsertTo) {
+      if (this.ddList.dragEl !== this.ddList.dropInsertTo && (this.ddList.dropInsertTo != null)) {
         if (this.ddList.dropBeforeOrAfter === 'before') {
           return el.insertBefore(this.ddList.dropInsertTo);
         } else if (this.ddList.dropBeforeOrAfter === 'after') {
@@ -253,7 +257,7 @@ DroppableTarget = (function() {
     return $(el).css('position', 'relative');
   };
   DroppableTarget.prototype.isMaxed = function() {
-    if ($(this.el).children().length < this.maxItems || this.maxItems === null) {
+    if ($(this.el).children().length < this.maxItems || (this.maxItems != null)) {
       return false;
     } else {
       return true;
