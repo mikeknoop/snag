@@ -156,10 +156,10 @@ DraggableItem = (function() {
     return this.attachDropElement(ph);
   };
   DraggableItem.prototype.attachDropElement = function(el) {
-    if (this.ddList.dropTargetParent != null) {
+    if (this.ddList.dropTargetParent === null) {
       return $(el).appendTo(this.originalParent);
     } else {
-      if (this.ddList.dragEl !== this.ddList.dropInsertTo && (this.ddList.dropInsertTo != null)) {
+      if (this.ddList.dropInsertTo !== null && this.ddList.dragEl !== this.ddList.dropInsertTo) {
         if (this.ddList.dropBeforeOrAfter === 'before') {
           return el.insertBefore(this.ddList.dropInsertTo);
         } else if (this.ddList.dropBeforeOrAfter === 'after') {
@@ -257,7 +257,7 @@ DroppableTarget = (function() {
     return $(el).css('position', 'relative');
   };
   DroppableTarget.prototype.isMaxed = function() {
-    if ($(this.el).children().length < this.maxItems || (this.maxItems != null)) {
+    if ($(this.el).children().length < this.maxItems || this.maxItems === null) {
       return false;
     } else {
       return true;
