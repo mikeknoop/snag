@@ -136,7 +136,7 @@ class DraggableItem
 	endDrag: (e, el) ->
 		di = this
 		@dragging = false
-		@ddList.dragEl = null
+		@dragEl = null
 		$(document).unbind('mouseup.'+@uid)
 		# remove end drag handler
 		# left mouse button was released, clear flag

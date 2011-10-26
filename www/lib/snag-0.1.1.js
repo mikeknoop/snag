@@ -125,7 +125,7 @@ DraggableItem = (function() {
     var di;
     di = this;
     this.dragging = false;
-    this.ddList.dragEl = null;
+    this.dragEl = null;
     $(document).unbind('mouseup.' + this.uid);
     if (e.which === 1) {
       this.leftButtonDown = false;
