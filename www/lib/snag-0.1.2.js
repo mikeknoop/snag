@@ -1,6 +1,6 @@
 /*
 
-	Snag.js 0.1.1
+	Snag.js 0.1.2
 	A stupidly simple (to use) javascript drag and drop
 	(c) 2010 Mike Knoop, Snapier LLC
 	Snag may be freely distributed under the MIT license.
@@ -125,7 +125,7 @@ DraggableItem = (function() {
     var di;
     di = this;
     this.dragging = false;
-    this.dragEl = null;
+    this.ddList.dragEl = null;
     $(document).unbind('mouseup.' + this.uid);
     if (e.which === 1) {
       this.leftButtonDown = false;

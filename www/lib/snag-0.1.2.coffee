@@ -1,6 +1,6 @@
 ###
 
-	Snag.js 0.1.1
+	Snag.js 0.1.2
 	A stupidly simple (to use) javascript drag and drop
 	(c) 2010 Mike Knoop, Snapier LLC
 	Snag may be freely distributed under the MIT license.
@@ -136,7 +136,7 @@ class DraggableItem
 	endDrag: (e, el) ->
 		di = this
 		@dragging = false
-		@dragEl = null
+		@ddList.dragEl = null
 		$(document).unbind('mouseup.'+@uid)
 		# remove end drag handler
 		# left mouse button was released, clear flag
