@@ -1,8 +1,8 @@
 ###
 
-	Snag.js 0.1.2
-	A stupidly simple (to use) javascript drag and drop
-	(c) 2010 Mike Knoop, Snapier LLC
+	Snag.js 0.1.3
+	A simple javascript drag and drop
+	(c) 2010 Mike Knoop
 	Snag may be freely distributed under the MIT license.
 	For all details and documentation:
 	http://github.com/mikeknoop/snag
@@ -16,6 +16,8 @@
 	Enable dragging between parent elements who have the "drag-parent-ex-1" class:
 		$(document).ready ->
 			dd = new SnagDragDrop("drag-parent-ex-1")
+
+	Snag will trigger event named 'change:dom' to the parent elements when elements have changed
 
 	Dependencies:
 		jQuery (tested with > 1.6.2)
@@ -51,6 +53,9 @@ class SnagDragDrop
 		$(document).bind('mouseup.'+@className, (e) ->
 			dd.mouseUp(e)
 		)
+		$(document).bind('rescan:snag', (e) -> 
+			dd.rescanDraggable(dd) 
+		)
 
 	mouseDown: (e) ->
 		# mouseDown/Up fixes cursor change when dragging
@@ -61,14 +66,19 @@ class SnagDragDrop
 		return false if @dragEl?
 
 	attachDroppable: (className) ->
-		ddList = this
+		ddList = @
 		$(".#{className}").each ->
 			$(this).data('drag-context', new DroppableTarget(ddList, this))
 			
 	attachDraggable: (className) ->
-		ddList = this
+		ddList = @
 		$(".#{className}").children().each ->
 			$(this).data('drag-context', new DraggableItem(ddList, this))
+
+	rescanDraggable: (context) ->
+		if not context?
+			context = @
+		context.attachDraggable(context.className)
 
 	getUniqueId: ->
 		@uid_i = @uid_i+1
@@ -86,6 +96,7 @@ class DraggableItem
 	# @mouseOffsetY	-	int, offset y "
 	# @originalParent	-	parent element, used to know where to snap back to if not dropped onto a DroppableTarget
 	# @leftButtonDown 	- 	helps eliminate mouse tracking errors
+	# @previousParent	-	parent who owned the element prior to the most recent drag event
 
 	constructor: (@ddList, @el) ->
 		@uid = @ddList.getUniqueId()
@@ -93,6 +104,7 @@ class DraggableItem
 		@attachCallbacks(@el)
 		@attachCss(@el)
 		@originalParent = $(el).parent()
+		@previousParent = @originalParent
 		@leftButtonDown = false
 	
 	attachCallbacks: (el) ->
@@ -136,7 +148,6 @@ class DraggableItem
 	endDrag: (e, el) ->
 		di = this
 		@dragging = false
-		@ddList.dragEl = null
 		$(document).unbind('mouseup.'+@uid)
 		# remove end drag handler
 		# left mouse button was released, clear flag
@@ -147,9 +158,16 @@ class DraggableItem
 		# reset position
 		$(el).css('left', '')
 		$(el).css('top', '')
-		@attachDropElement($(el))
+		parent = @attachDropElement($(el))
+		@ddList.dragEl = null #make sure this is after the attachDropElement call
 		$(document).trigger('mousemove', e);
-	
+		# fire events on both origin and destination el if different
+		if ($(@previousParent).get(0) != $(parent).get(0))
+			$(@previousParent).trigger('change:dom')
+			$(parent).trigger('change:dom')
+		# update prev parent
+		@previousParent = parent
+			
 	updateDrag: (e, el) ->
 		return if not @dragging
 		# item is being dragged (mouse moved while in dragging state)
@@ -169,17 +187,19 @@ class DraggableItem
 		# to do this generally, copy the draggable element
 		ph = $(document.createElement($(@ddList.dragEl).get(0).tagName))
 		ph.addClass("#{@ddList.className}-item drag-placeholder")
-		@attachDropElement(ph)
+		parent = @attachDropElement(ph)
 
 	attachDropElement: (el) ->
 		if (@ddList.dropTargetParent == null)
 			# not dropped on a DroppableTarget, append back to original parent
-			$(el).appendTo(@originalParent)
+			parent = @originalParent
+			$(el).appendTo(parent)
 		else
 			# mouse is over a DroppableTarget, where to attach target?
 			# the second conditional checks the case where the last element is being
-			if (@ddList.dropInsertTo != null and @ddList.dragEl != @ddList.dropInsertTo)
+			if (@ddList.dropInsertTo != null and $(@ddList.dragEl).get(0) != $(@ddList.dropInsertTo).get(0))
 				# implies we have an element to append before or after
+				parent = @ddList.dropInsertTo
 				if (@ddList.dropBeforeOrAfter == 'before')
 					# append before a specific child inside the parent
 					el.insertBefore(@ddList.dropInsertTo)
@@ -188,8 +208,9 @@ class DraggableItem
 					el.insertAfter(@ddList.dropInsertTo)
 			else
 				# no element selected to insert after, append to top level parent
-				el.appendTo(@ddList.dropTargetParent)
-
+				parent = @ddList.dropTargetParent
+				el.appendTo(parent)
+		return parent
 
 	tweakMouseMoveEvent: (e) ->
 		# helper function for preventing mouse tracking errors
@@ -291,7 +312,3 @@ class DroppableTarget
 		@ddList.dropTargetParent = null
 		@ddList.dropInsertTo = null
 		@ddList.dropBeforeOrAfter = null
-
-# monitor services list
-$(document).ready ->
-	dd = new SnagDragDrop("dd-service")

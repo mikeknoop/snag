@@ -1,8 +1,8 @@
 /*
 
-	Snag.js 0.1.2
-	A stupidly simple (to use) javascript drag and drop
-	(c) 2010 Mike Knoop, Snapier LLC
+	Snag.js 0.1.3
+	A simple javascript drag and drop
+	(c) 2010 Mike Knoop
 	Snag may be freely distributed under the MIT license.
 	For all details and documentation:
 	http://github.com/mikeknoop/snag
@@ -16,6 +16,8 @@
 	Enable dragging between parent elements who have the "drag-parent-ex-1" class:
 		$(document).ready ->
 			dd = new SnagDragDrop("drag-parent-ex-1")
+
+	Snag will trigger event named 'change:dom' to the parent elements when elements have changed
 
 	Dependencies:
 		jQuery (tested with > 1.6.2)
@@ -40,8 +42,11 @@ SnagDragDrop = (function() {
     $(document).bind('mousedown.' + this.className, function(e) {
       return dd.mouseDown(e);
     });
-    return $(document).bind('mouseup.' + this.className, function(e) {
+    $(document).bind('mouseup.' + this.className, function(e) {
       return dd.mouseUp(e);
+    });
+    return $(document).bind('rescan:snag', function(e) {
+      return dd.rescanDraggable(dd);
     });
   };
   SnagDragDrop.prototype.mouseDown = function(e) {
@@ -68,6 +73,12 @@ SnagDragDrop = (function() {
       return $(this).data('drag-context', new DraggableItem(ddList, this));
     });
   };
+  SnagDragDrop.prototype.rescanDraggable = function(context) {
+    if (!(context != null)) {
+      context = this;
+    }
+    return context.attachDraggable(context.className);
+  };
   SnagDragDrop.prototype.getUniqueId = function() {
     var d, uid;
     this.uid_i = this.uid_i + 1;
@@ -86,6 +97,7 @@ DraggableItem = (function() {
     this.attachCallbacks(this.el);
     this.attachCss(this.el);
     this.originalParent = $(el).parent();
+    this.previousParent = this.originalParent;
     this.leftButtonDown = false;
   }
   DraggableItem.prototype.attachCallbacks = function(el) {
@@ -122,10 +134,9 @@ DraggableItem = (function() {
     return $(document).trigger('mousemove', e);
   };
   DraggableItem.prototype.endDrag = function(e, el) {
-    var di;
+    var di, parent;
     di = this;
     this.dragging = false;
-    this.ddList.dragEl = null;
     $(document).unbind('mouseup.' + this.uid);
     if (e.which === 1) {
       this.leftButtonDown = false;
@@ -134,11 +145,17 @@ DraggableItem = (function() {
     $(el).css('position', '');
     $(el).css('left', '');
     $(el).css('top', '');
-    this.attachDropElement($(el));
-    return $(document).trigger('mousemove', e);
+    parent = this.attachDropElement($(el));
+    this.ddList.dragEl = null;
+    $(document).trigger('mousemove', e);
+    if ($(this.previousParent).get(0) !== $(parent).get(0)) {
+      $(this.previousParent).trigger('change:dom');
+      $(parent).trigger('change:dom');
+    }
+    return this.previousParent = parent;
   };
   DraggableItem.prototype.updateDrag = function(e, el) {
-    var mouseX, mouseY, ph;
+    var mouseX, mouseY, parent, ph;
     if (!this.dragging) {
       return;
     }
@@ -153,22 +170,27 @@ DraggableItem = (function() {
     $(el).css('top', mouseY - this.mouseOffsetY);
     ph = $(document.createElement($(this.ddList.dragEl).get(0).tagName));
     ph.addClass("" + this.ddList.className + "-item drag-placeholder");
-    return this.attachDropElement(ph);
+    return parent = this.attachDropElement(ph);
   };
   DraggableItem.prototype.attachDropElement = function(el) {
+    var parent;
     if (this.ddList.dropTargetParent === null) {
-      return $(el).appendTo(this.originalParent);
+      parent = this.originalParent;
+      $(el).appendTo(parent);
     } else {
-      if (this.ddList.dropInsertTo !== null && this.ddList.dragEl !== this.ddList.dropInsertTo) {
+      if (this.ddList.dropInsertTo !== null && $(this.ddList.dragEl).get(0) !== $(this.ddList.dropInsertTo).get(0)) {
+        parent = this.ddList.dropInsertTo;
         if (this.ddList.dropBeforeOrAfter === 'before') {
-          return el.insertBefore(this.ddList.dropInsertTo);
+          el.insertBefore(this.ddList.dropInsertTo);
         } else if (this.ddList.dropBeforeOrAfter === 'after') {
-          return el.insertAfter(this.ddList.dropInsertTo);
+          el.insertAfter(this.ddList.dropInsertTo);
         }
       } else {
-        return el.appendTo(this.ddList.dropTargetParent);
+        parent = this.ddList.dropTargetParent;
+        el.appendTo(parent);
       }
     }
+    return parent;
   };
   DraggableItem.prototype.tweakMouseMoveEvent = function(e) {
     var leftButtonDown;
@@ -275,7 +297,3 @@ DroppableTarget = (function() {
   };
   return DroppableTarget;
 })();
-$(document).ready(function() {
-  var dd;
-  return dd = new SnagDragDrop("dd-service");
-});
