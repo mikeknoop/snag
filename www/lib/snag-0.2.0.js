@@ -1,6 +1,6 @@
 /*
 
-	Snag.js 0.1.3
+	Snag.js 0.2.0
 	A simple javascript drag and drop
 	(c) 2010 Mike Knoop
 	Snag may be freely distributed under the MIT license.
@@ -9,45 +9,44 @@
 
 	This file compiles with CoffeeScript (http://jashkenas.github.com/coffee-script/)
 
-	In your CSS, create two global classes:
+	In your CSS, create three global classes:
+		.dd-item				-	this class automatically added to each child element tracked
 		.dragging			-	these styles applied to the element while being dragged
 		.drag-placeholder	-	defines the styles of the placeholder (the "shadow" drop target)
 
-	Enable dragging between parent elements who have the "drag-parent-ex-1" class:
+	Enable dragging between parent elements who share "drag1" class:
 		$(document).ready ->
-			dd = new SnagDragDrop("drag-parent-ex-1")
+			dd = new SnagDragDrop(["drag1"])
 
-	Snag will trigger event named 'change:dom' to the parent elements when elements have changed
+	Snag will trigger event named 'change:dom' to the parent droppables when elements within have changed.
+	Trigger the event 'snag:rescan' on $(document) to tell Snag to re-analyze the page (such as after an AJAX load).
 
 	Dependencies:
-		jQuery (tested with > 1.6.2)
+		jQuery 1.7 (tested with > 1.7)
 	
 */
 var DraggableItem, DroppableTarget, SnagDragDrop;
 SnagDragDrop = (function() {
-  function SnagDragDrop(className) {
-    this.className = className;
+  function SnagDragDrop(classNames) {
+    this.classNames = classNames;
     this.uid_i = 0;
-    this.attachHooks(this.className);
     this.dropTargetParent = null;
     this.dropInsertTo = null;
     this.dropBeforeOrAfter = null;
     this.dragEl = null;
+    this.attachHooks(this.className);
   }
-  SnagDragDrop.prototype.attachHooks = function(className) {
+  SnagDragDrop.prototype.attachHooks = function(classNames) {
     var dd;
-    this.attachDroppable(className);
-    this.attachDraggable(className);
     dd = this;
-    $(document).bind('mousedown.' + this.className, function(e) {
+    $(document).on('mousedown.SnagDragDrop', function(e) {
       return dd.mouseDown(e);
     });
-    $(document).bind('mouseup.' + this.className, function(e) {
+    $(document).on('mouseup.snag', function(e) {
       return dd.mouseUp(e);
     });
-    return $(document).bind('rescan:snag', function(e) {
-      return dd.rescanDraggable(dd);
-    });
+    this.createListener(classNames);
+    return $(document).trigger('snag:rescan');
   };
   SnagDragDrop.prototype.mouseDown = function(e) {
     if (this.dragEl != null) {
@@ -59,25 +58,38 @@ SnagDragDrop = (function() {
       return false;
     }
   };
-  SnagDragDrop.prototype.attachDroppable = function(className) {
-    var ddList;
-    ddList = this;
-    return $("." + className).each(function() {
-      return $(this).data('drag-context', new DroppableTarget(ddList, this));
+  SnagDragDrop.prototype.createListener = function(classNames) {
+    var dd;
+    dd = this;
+    return $(document).on('snag:rescan', function(e) {
+      var className, _i, _len, _ref, _results;
+      _ref = dd.classNames;
+      _results = [];
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        className = _ref[_i];
+        _results.push($("." + className).each(function() {
+          var _ref2;
+          if (!($(this).data('drag-context') != null) || ((_ref2 = $(this).data('drag-context')) != null ? _ref2.className : void 0) !== className) {
+            if ($(this).data('drag-context') != null) {
+              $(this).data('drag-context').removeHandlers();
+            }
+            $(this).data('drag-context', null);
+            $(this).data('drag-context', new DroppableTarget(dd, this, className));
+          }
+          return $(this).children().each(function() {
+            var _ref3;
+            if (!($(this).data('drag-context') != null) || ((_ref3 = $(this).data('drag-context')) != null ? _ref3.className : void 0) !== className) {
+              if ($(this).data('drag-context') != null) {
+                $(this).data('drag-context').removeHandlers();
+              }
+              $(this).data('drag-context', null);
+              return $(this).data('drag-context', new DraggableItem(dd, this, className));
+            }
+          });
+        }));
+      }
+      return _results;
     });
-  };
-  SnagDragDrop.prototype.attachDraggable = function(className) {
-    var ddList;
-    ddList = this;
-    return $("." + className).children().each(function() {
-      return $(this).data('drag-context', new DraggableItem(ddList, this));
-    });
-  };
-  SnagDragDrop.prototype.rescanDraggable = function(context) {
-    if (!(context != null)) {
-      context = this;
-    }
-    return context.attachDraggable(context.className);
   };
   SnagDragDrop.prototype.getUniqueId = function() {
     var d, uid;
@@ -89,10 +101,12 @@ SnagDragDrop = (function() {
   return SnagDragDrop;
 })();
 DraggableItem = (function() {
-  function DraggableItem(ddList, el) {
+  function DraggableItem(ddList, el, className) {
     this.ddList = ddList;
     this.el = el;
+    this.className = className;
     this.uid = this.ddList.getUniqueId();
+    this.className = this.className;
     this.dragging = false;
     this.attachCallbacks(this.el);
     this.attachCss(this.el);
@@ -100,32 +114,37 @@ DraggableItem = (function() {
     this.previousParent = this.originalParent;
     this.leftButtonDown = false;
   }
+  DraggableItem.prototype.removeHandlers = function() {
+    $(this.el).off();
+    $(document).off('mousemove.' + this.uid);
+    return $(document).off('mouseup.' + this.uid);
+  };
   DraggableItem.prototype.attachCallbacks = function(el) {
     var di;
     di = this;
-    $(el).bind('mousedown', function(e) {
+    $(el).on('mousedown', function(e) {
       return di.beginDrag(e, el);
     });
-    return $(document).bind('mousemove.' + this.uid, function(e) {
+    return $(document).on('mousemove.' + this.uid, function(e) {
       return di.updateDrag(e, el);
     });
   };
   DraggableItem.prototype.attachCss = function(el) {
-    return $(el).addClass(this.ddList.className + '-item');
+    return $(el).addClass('dd-item');
   };
   DraggableItem.prototype.beginDrag = function(e, el) {
     var di;
     di = this;
     this.dragging = true;
     this.ddList.dragEl = el;
-    $(document).bind('mouseup.' + this.uid, function(e) {
+    $(document).on('mouseup.' + this.uid, function(e) {
       return di.endDrag(e, el);
     });
     if (e.which === 1) {
       this.leftButtonDown = true;
     }
-    this.mouseOffsetX = e.pageX - $(el).offset().left + 15;
-    this.mouseOffsetY = e.pageY - $(el).offset().top + 10;
+    this.mouseOffsetX = e.pageX - $(el).offset().left;
+    this.mouseOffsetY = e.pageY - $(el).offset().top;
     $(el).appendTo('body');
     $(el).addClass('dragging');
     $(el).css('position', 'absolute');
@@ -169,7 +188,7 @@ DraggableItem = (function() {
     $(el).css('left', mouseX - this.mouseOffsetX);
     $(el).css('top', mouseY - this.mouseOffsetY);
     ph = $(document.createElement($(this.ddList.dragEl).get(0).tagName));
-    ph.addClass("" + this.ddList.className + "-item drag-placeholder");
+    ph.addClass("dd-item drag-placeholder");
     return parent = this.attachDropElement(ph);
   };
   DraggableItem.prototype.attachDropElement = function(el) {
@@ -204,10 +223,12 @@ DraggableItem = (function() {
   return DraggableItem;
 })();
 DroppableTarget = (function() {
-  function DroppableTarget(ddList, el) {
+  function DroppableTarget(ddList, el, className) {
     this.ddList = ddList;
     this.el = el;
+    this.className = className;
     this.uid = this.ddList.getUniqueId();
+    this.className = this.className;
     this.attachCallbacks(this.el);
     this.attachCss(this.el);
     this.inTarget = false;
@@ -220,10 +241,14 @@ DroppableTarget = (function() {
       this.maxItems = null;
     }
   }
+  DroppableTarget.prototype.removeHandlers = function() {
+    $(document).off('mousemove.' + this.uid);
+    return $(document).off('mousemove.' + this.uid);
+  };
   DroppableTarget.prototype.attachCallbacks = function(el) {
     var dt;
     dt = this;
-    return $(document).bind('mousemove.' + this.uid, function(e, trigger) {
+    return $(document).on('mousemove.' + this.uid, function(e, trigger) {
       if (trigger != null) {
         e.pageX = trigger.pageX;
         e.pageY = trigger.pageY;

@@ -1,6 +1,6 @@
 ###
 
-	Snag.js 0.1.3
+	Snag.js 0.2.0
 	A simple javascript drag and drop
 	(c) 2010 Mike Knoop
 	Snag may be freely distributed under the MIT license.
@@ -9,53 +9,54 @@
 
 	This file compiles with CoffeeScript (http://jashkenas.github.com/coffee-script/)
 
-	In your CSS, create two global classes:
+	In your CSS, create three global classes:
+		.dd-item				-	this class automatically added to each child element tracked
 		.dragging			-	these styles applied to the element while being dragged
 		.drag-placeholder	-	defines the styles of the placeholder (the "shadow" drop target)
 
-	Enable dragging between parent elements who have the "drag-parent-ex-1" class:
+	Enable dragging between parent elements who share "drag1" class:
 		$(document).ready ->
-			dd = new SnagDragDrop("drag-parent-ex-1")
+			dd = new SnagDragDrop(["drag1"])
 
-	Snag will trigger event named 'change:dom' to the parent elements when elements have changed
+	Snag will trigger event named 'change:dom' to the parent droppables when elements within have changed.
+	Trigger the event 'snag:rescan' on $(document) to tell Snag to re-analyze the page (such as after an AJAX load).
 
 	Dependencies:
-		jQuery (tested with > 1.6.2)
+		jQuery 1.7 (tested with > 1.7)
 	
 ###
 
 class SnagDragDrop
-	# @className			-	name of the class to enable drag/drop between
-	# @dragEl				-	el which is being dragged
+	# @classNames				-	(array) of names of the class to enable drag/drop between
+	# @dragEl					-	el which is being dragged
 	# @dropTargetParent		-	el name of parent target to drop draggables into
 	#							if null, mouse is not over a DroppableTarget
 	# @dropInsertTo			-	el name of target to insert (before/after)
-	# @dropBeforeOrAfter	-	string, 'before' or 'after' or null
-	# @uid_i				-	unique id counter
+	# @dropBeforeOrAfter		-	string, 'before' or 'after' or null
+	# @uid_i						-	unique id counter
 
-	constructor: (@className) ->
+	constructor: (@classNames) ->
+		# only construct this class if at least one className exists
+		#return if $(".#{className}").length == 0
 		@uid_i = 0
-		@attachHooks(@className)
 		@dropTargetParent = null
 		@dropInsertTo = null
 		@dropBeforeOrAfter = null
 		@dragEl = null
+		@attachHooks(@className)
 
-	attachHooks: (className) -> 
-		# attach drop hooks to eahc className and
-		# drag hooks to each child of className
-		@attachDroppable(className)
-		@attachDraggable(className)
+	attachHooks: (classNames) -> 
 		dd = this
-		$(document).bind('mousedown.'+@className, (e) ->
+		$(document).on('mousedown.SnagDragDrop', (e) ->
 			dd.mouseDown(e)
 		)
-		$(document).bind('mouseup.'+@className, (e) ->
+		$(document).on('mouseup.snag', (e) ->
 			dd.mouseUp(e)
 		)
-		$(document).bind('rescan:snag', (e) -> 
-			dd.rescanDraggable(dd) 
-		)
+		# create a global listener for snag rescan events
+		@createListener(classNames)
+		# now trigger one such event to initialize everything
+		$(document).trigger('snag:rescan')
 
 	mouseDown: (e) ->
 		# mouseDown/Up fixes cursor change when dragging
@@ -65,20 +66,26 @@ class SnagDragDrop
 		# mouseDown/Up fixes cursor change when dragging
 		return false if @dragEl?
 
-	attachDroppable: (className) ->
-		ddList = @
-		$(".#{className}").each ->
-			$(this).data('drag-context', new DroppableTarget(ddList, this))
-			
-	attachDraggable: (className) ->
-		ddList = @
-		$(".#{className}").children().each ->
-			$(this).data('drag-context', new DraggableItem(ddList, this))
-
-	rescanDraggable: (context) ->
-		if not context?
-			context = @
-		context.attachDraggable(context.className)
+	createListener: (classNames) ->
+		dd = @
+		$(document).on('snag:rescan', (e) ->
+			# means we need to re-discover all classNames, check their children
+			# to ensure they still match their parent, and if not, create new
+			# droppableItems for them
+			for className in dd.classNames
+				$(".#{className}").each ->
+					if not $(@).data('drag-context')? or $(@).data('drag-context')?.className != className
+						# this parent element never had a droppableTarget before or it has changed
+						$(@).data('drag-context').removeHandlers() if $(@).data('drag-context')?
+						$(@).data('drag-context', null)
+						$(@).data('drag-context', new DroppableTarget(dd, @, className))
+					$(@).children().each ->
+						if not $(@).data('drag-context')? or $(@).data('drag-context')?.className != className
+							# so this element previously belonged to a different parent or is brand new
+							$(@).data('drag-context').removeHandlers() if $(@).data('drag-context')?
+							$(@).data('drag-context', null)
+							$(@).data('drag-context', new DraggableItem(dd, @, className))
+		)
 
 	getUniqueId: ->
 		@uid_i = @uid_i+1
@@ -89,6 +96,7 @@ class SnagDragDrop
 class DraggableItem
 	# defines an item which can be manipulated
 	# uid			-	unique id
+	# classNames		-	class name of the drag/drop list this item is attached to
 	# @ddList		-	dragdrop list this item can be dragged to
 	# @el			-	DOM element this object is attached to
 	# @dragging		-	bool, currently being dragged
@@ -98,8 +106,9 @@ class DraggableItem
 	# @leftButtonDown 	- 	helps eliminate mouse tracking errors
 	# @previousParent	-	parent who owned the element prior to the most recent drag event
 
-	constructor: (@ddList, @el) ->
+	constructor: (@ddList, @el, @className) ->
 		@uid = @ddList.getUniqueId()
+		@className = @className
 		@dragging = false
 		@attachCallbacks(@el)
 		@attachCss(@el)
@@ -107,34 +116,40 @@ class DraggableItem
 		@previousParent = @originalParent
 		@leftButtonDown = false
 	
+	removeHandlers: () ->
+		$(@el).off()
+		$(document).off('mousemove.'+@uid)
+		$(document).off('mouseup.'+@uid)
+
 	attachCallbacks: (el) ->
 		di = this
-		$(el).bind('mousedown', (e) ->
+		$(el).on('mousedown', (e) ->
 			di.beginDrag(e, el)
 		)
 		# mouseup is bound dynamically when dragging begins (see beginDrag)
 		# bind the movement callback (to actually change the el position)
-		$(document).bind('mousemove.'+@uid, (e) ->
+		$(document).on('mousemove.'+@uid, (e) ->
 			di.updateDrag(e, el)
 		)
 
 	attachCss: (el) ->
 		# attach drag specific styles needed to work
-		$(el).addClass(@ddList.className+'-item')
+		# $(el).addClass(@ddList.className+'-item')
+		$(el).addClass('dd-item')
 
 	beginDrag: (e, el) ->
 		di = this
 		@dragging = true
 		@ddList.dragEl = el
 		# add handler for ending drag
-		$(document).bind('mouseup.'+@uid, (e) ->
+		$(document).on('mouseup.'+@uid, (e) ->
 			di.endDrag(e, el)
 		)
 		# left mouse button was pressed, set flag
 		@leftButtonDown = true if (e.which == 1) 
-		# save mouse offset plus a hard osset to account for cursor size
-		@mouseOffsetX = e.pageX - $(el).offset().left + 15
-		@mouseOffsetY = e.pageY - $(el).offset().top + 10
+		# save mouse offset plus a hard offset to account for cursor size
+		@mouseOffsetX = e.pageX - $(el).offset().left
+		@mouseOffsetY = e.pageY - $(el).offset().top
 		# now append (and remove from current parent) to body
 		$(el).appendTo('body')
 		# adds absolute positioning and shadow/rotation styles
@@ -186,7 +201,7 @@ class DraggableItem
 		# adds a placeholder "grey box" into the dom to show where the item will be dropped
 		# to do this generally, copy the draggable element
 		ph = $(document.createElement($(@ddList.dragEl).get(0).tagName))
-		ph.addClass("#{@ddList.className}-item drag-placeholder")
+		ph.addClass("dd-item drag-placeholder")
 		parent = @attachDropElement(ph)
 
 	attachDropElement: (el) ->
@@ -222,14 +237,16 @@ class DraggableItem
 
 class DroppableTarget
 	# defines a target which can have things dropped into it
-	# uid			-	unique id
+	# classNames	-	className of this element
+	# uid				-	unique id
 	# @ddList		-	dragdrop list this item can be dragged to
-	# @el			-	DOM element this object is attached to
+	# @el				-	DOM element this object is attached to
 	# @inTarget		-	bool, mouse is in the target
 	# @maxItems		-	int, max items this droppable can hold
 
-	constructor: (@ddList, @el) ->
+	constructor: (@ddList, @el, @className) ->
 		@uid = @ddList.getUniqueId()
+		@className = @className
 		@attachCallbacks(@el)
 		@attachCss(@el)
 		@inTarget = false
@@ -241,9 +258,13 @@ class DroppableTarget
 		else
 			@maxItems = null
 	
+	removeHandlers: () ->
+		$(document).off('mousemove.'+@uid)
+		$(document).off('mousemove.'+@uid)
+
 	attachCallbacks: (el) ->
 		dt = this
-		$(document).bind('mousemove.'+@uid, (e, trigger) ->
+		$(document).on('mousemove.'+@uid, (e, trigger) ->
 			if trigger?
 				e.pageX = trigger.pageX
 				e.pageY = trigger.pageY
