@@ -1,29 +1,29 @@
 /*
 
-	Snag.js 0.2.0
-	A simple javascript drag and drop
-	(c) 2010 Mike Knoop
-	Snag may be freely distributed under the MIT license.
-	For all details and documentation:
-	http://github.com/mikeknoop/snag
+  Snag.js 0.2.0
+  A simple javascript drag and drop
+  (c) 2010 Mike Knoop
+  Snag may be freely distributed under the MIT license.
+  For all details and documentation:
+  http://github.com/mikeknoop/snag
 
-	This file compiles with CoffeeScript (http://jashkenas.github.com/coffee-script/)
+  This file compiles with CoffeeScript (http://jashkenas.github.com/coffee-script/)
 
-	In your CSS, create three global classes:
-		.dd-item				-	this class automatically added to each child element tracked
-		.dragging			-	these styles applied to the element while being dragged
-		.drag-placeholder	-	defines the styles of the placeholder (the "shadow" drop target)
+  In your CSS, create three global classes:
+    .dd-item        - this class automatically added to each child element tracked
+    .dragging     - these styles applied to the element while being dragged
+    .drag-placeholder - defines the styles of the placeholder (the "shadow" drop target)
 
-	Enable dragging between parent elements who share "drag1" class:
-		$(document).ready ->
-			dd = new SnagDragDrop(["drag1"])
+  Enable dragging between parent elements who share "drag1" class:
+    $(document).ready ->
+      dd = new SnagDragDrop(["drag1"])
 
-	Snag will trigger event named 'change:dom' to the parent droppables when elements within have changed.
-	Trigger the event 'snag:rescan' on $(document) to tell Snag to re-analyze the page (such as after an AJAX load).
+  Snag will trigger event named 'change:dom' to the parent droppables when elements within have changed.
+  Trigger the event 'snag:rescan' on $(document) to tell Snag to re-analyze the page (such as after an AJAX load).
 
-	Dependencies:
-		jQuery 1.7 (tested with > 1.7)
-	
+  Dependencies:
+    jQuery 1.7 (tested with > 1.7)
+  
 */
 var DraggableItem, DroppableTarget, SnagDragDrop;
 SnagDragDrop = (function() {
@@ -67,24 +67,20 @@ SnagDragDrop = (function() {
       _results = [];
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         className = _ref[_i];
+        $("." + className).each(function() {
+          if ($(this).data('drag-context') != null) {
+            $(this).data('drag-context').removeHandlers();
+          }
+          $(this).data('drag-context', null);
+          return $(this).data('drag-context', new DroppableTarget(dd, this, className));
+        });
         _results.push($("." + className).each(function() {
-          var _ref2;
-          if (!($(this).data('drag-context') != null) || ((_ref2 = $(this).data('drag-context')) != null ? _ref2.className : void 0) !== className) {
+          return $(this).children().each(function() {
             if ($(this).data('drag-context') != null) {
               $(this).data('drag-context').removeHandlers();
             }
             $(this).data('drag-context', null);
-            $(this).data('drag-context', new DroppableTarget(dd, this, className));
-          }
-          return $(this).children().each(function() {
-            var _ref3;
-            if (!($(this).data('drag-context') != null) || ((_ref3 = $(this).data('drag-context')) != null ? _ref3.className : void 0) !== className) {
-              if ($(this).data('drag-context') != null) {
-                $(this).data('drag-context').removeHandlers();
-              }
-              $(this).data('drag-context', null);
-              return $(this).data('drag-context', new DraggableItem(dd, this, className));
-            }
+            return $(this).data('drag-context', new DraggableItem(dd, this, className));
           });
         }));
       }
@@ -164,7 +160,7 @@ DraggableItem = (function() {
     $(el).css('position', '');
     $(el).css('left', '');
     $(el).css('top', '');
-    parent = this.attachDropElement($(el));
+    parent = this.attachDropElement($(el), false);
     this.ddList.dragEl = null;
     $(document).trigger('mousemove', e);
     if ($(this.previousParent).get(0) !== $(parent).get(0)) {
@@ -189,9 +185,9 @@ DraggableItem = (function() {
     $(el).css('top', mouseY - this.mouseOffsetY);
     ph = $(document.createElement($(this.ddList.dragEl).get(0).tagName));
     ph.addClass("dd-item drag-placeholder");
-    return parent = this.attachDropElement(ph);
+    return parent = this.attachDropElement(ph, true);
   };
-  DraggableItem.prototype.attachDropElement = function(el) {
+  DraggableItem.prototype.attachDropElement = function(el, deb) {
     var parent;
     if (this.ddList.dropTargetParent === null) {
       parent = this.originalParent;
@@ -227,6 +223,7 @@ DroppableTarget = (function() {
     this.ddList = ddList;
     this.el = el;
     this.className = className;
+    this.name = $(this.el).attr('id');
     this.uid = this.ddList.getUniqueId();
     this.className = this.className;
     this.attachCallbacks(this.el);

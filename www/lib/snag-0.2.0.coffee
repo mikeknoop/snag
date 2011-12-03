@@ -74,17 +74,16 @@ class SnagDragDrop
 			# droppableItems for them
 			for className in dd.classNames
 				$(".#{className}").each ->
-					if not $(@).data('drag-context')? or $(@).data('drag-context')?.className != className
-						# this parent element never had a droppableTarget before or it has changed
+					$(@).data('drag-context').removeHandlers() if $(@).data('drag-context')?
+					$(@).data('drag-context', null)
+					$(@).data('drag-context', new DroppableTarget(dd, @, className))
+				$(".#{className}").each ->
+					# do this seperately because order of the DroppableTarget/Item is important
+					# mouse callback handlers are sensitive of order
+					$(@).children().each ->
 						$(@).data('drag-context').removeHandlers() if $(@).data('drag-context')?
 						$(@).data('drag-context', null)
-						$(@).data('drag-context', new DroppableTarget(dd, @, className))
-					$(@).children().each ->
-						if not $(@).data('drag-context')? or $(@).data('drag-context')?.className != className
-							# so this element previously belonged to a different parent or is brand new
-							$(@).data('drag-context').removeHandlers() if $(@).data('drag-context')?
-							$(@).data('drag-context', null)
-							$(@).data('drag-context', new DraggableItem(dd, @, className))
+						$(@).data('drag-context', new DraggableItem(dd, @, className))
 		)
 
 	getUniqueId: ->
@@ -173,7 +172,7 @@ class DraggableItem
 		# reset position
 		$(el).css('left', '')
 		$(el).css('top', '')
-		parent = @attachDropElement($(el))
+		parent = @attachDropElement($(el), false)
 		@ddList.dragEl = null #make sure this is after the attachDropElement call
 		$(document).trigger('mousemove', e);
 		# fire events on both origin and destination el if different
@@ -202,9 +201,9 @@ class DraggableItem
 		# to do this generally, copy the draggable element
 		ph = $(document.createElement($(@ddList.dragEl).get(0).tagName))
 		ph.addClass("dd-item drag-placeholder")
-		parent = @attachDropElement(ph)
+		parent = @attachDropElement(ph, true)
 
-	attachDropElement: (el) ->
+	attachDropElement: (el, deb) ->
 		if (@ddList.dropTargetParent == null)
 			# not dropped on a DroppableTarget, append back to original parent
 			parent = @originalParent
@@ -245,6 +244,7 @@ class DroppableTarget
 	# @maxItems		-	int, max items this droppable can hold
 
 	constructor: (@ddList, @el, @className) ->
+		@name = $(@el).attr('id')
 		@uid = @ddList.getUniqueId()
 		@className = @className
 		@attachCallbacks(@el)
